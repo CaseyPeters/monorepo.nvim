@@ -10,12 +10,14 @@ M.config = {
   silent = false,
   autoload_telescope = true,
   data_path = vim.fn.stdpath("data"),
+  auto_detect = true, -- Auto-detect projects from pnpm-workspace.yaml
 }
 
 ---@class pluginConfig
 ---@field silent boolean
 ---@field autoload_telescope boolean
 ---@field data_path string
+---@field auto_detect boolean
 ---@param config? pluginConfig
 M.setup = function(config)
   -- Overwrite default config with user config
@@ -26,6 +28,10 @@ M.setup = function(config)
   end
 
   vim.opt.autochdir = false
+  
+  -- Auto-detect monorepo root from pnpm-workspace.yaml
+  M.currentMonorepo = M.detect_monorepo_root()
+  
   utils.load() -- Load monorepo.json
 
   -- I don't know if this is bad practice but I had weird issues where
@@ -204,8 +210,20 @@ M.previous_project = function()
 end
 
 M.change_monorepo = function(path)
-  require("monorepo").currentMonorepo = path
+  -- Auto-detect monorepo root from the provided path
+  M.currentMonorepo = M.detect_monorepo_root(path)
   utils.load()
+end
+
+-- Detect monorepo root from pnpm-workspace.yaml location
+M.detect_monorepo_root = function(start_path)
+  start_path = start_path or vim.fn.getcwd()
+  local workspace_file = utils.find_pnpm_workspace(start_path)
+  if workspace_file then
+    local Path = require("plenary.path")
+    return Path:new(workspace_file):parent().filename
+  end
+  return start_path
 end
 
 return M
