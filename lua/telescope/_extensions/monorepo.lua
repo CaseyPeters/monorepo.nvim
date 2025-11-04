@@ -20,10 +20,17 @@ local function build_projects_list()
   local favorites = monorepo_module.get_favorites()
   local seen = {}
   
-  -- Add favorites first with star indicator
+  -- Sort favorites alphabetically
+  local sorted_favorites = {}
   for _, fav in ipairs(favorites) do
-    table.insert(all_projects, "⭐ " .. fav)
+    table.insert(sorted_favorites, fav)
     seen[fav] = true
+  end
+  table.sort(sorted_favorites)
+  
+  -- Add sorted favorites with star indicator
+  for _, fav in ipairs(sorted_favorites) do
+    table.insert(all_projects, "⭐ " .. fav)
   end
   
   -- Add separator if there are favorites
@@ -31,11 +38,18 @@ local function build_projects_list()
     table.insert(all_projects, "─────────────────────────")
   end
   
-  -- Add all other projects
+  -- Collect and sort non-favorite projects
+  local non_favorites = {}
   for _, project in ipairs(monorepo_module.currentProjects) do
     if not seen[project] then
-      table.insert(all_projects, "  " .. project)
+      table.insert(non_favorites, project)
     end
+  end
+  table.sort(non_favorites)
+  
+  -- Add sorted non-favorite projects
+  for _, project in ipairs(non_favorites) do
+    table.insert(all_projects, "  " .. project)
   end
   
   return all_projects
@@ -173,9 +187,16 @@ local favorites = function(opts)
     return
   end
   
+  -- Sort favorites alphabetically
+  local sorted_favs = {}
+  for _, fav in ipairs(favs) do
+    table.insert(sorted_favs, fav)
+  end
+  table.sort(sorted_favs)
+  
   -- Format favorites with star indicator
   local formatted_favorites = {}
-  for _, fav in ipairs(favs) do
+  for _, fav in ipairs(sorted_favs) do
     table.insert(formatted_favorites, "⭐ " .. fav)
   end
   
@@ -211,8 +232,15 @@ local favorites = function(opts)
               return
             end
             
-            local updated_favorites = {}
+            -- Sort favorites alphabetically
+            local sorted_favs = {}
             for _, fav in ipairs(favs) do
+              table.insert(sorted_favs, fav)
+            end
+            table.sort(sorted_favs)
+            
+            local updated_favorites = {}
+            for _, fav in ipairs(sorted_favs) do
               table.insert(updated_favorites, "⭐ " .. fav)
             end
             
