@@ -15,8 +15,7 @@ M.config = {
   default_keybindings = false, -- Set up default keybindings automatically
   keybindings = {
     -- Telescope pickers
-    open_projects = "<leader>m", -- Open projects picker
-    open_favorites = "<leader>mf", -- Open favorites picker
+    open_projects = "<leader>m", -- Open projects picker (shows favorites at top)
     -- Project management
     toggle_project = "<leader>mn", -- Toggle current project
     -- Navigation (optional, can be disabled by setting to nil)
@@ -89,18 +88,6 @@ M.setup_keybindings = function()
         utils.notify("Telescope is required for the projects picker")
       end
     end, { desc = "Monorepo: Open projects picker" })
-  end
-
-  -- Open favorites picker
-  if kb.open_favorites then
-    vim.keymap.set("n", kb.open_favorites, function()
-      local has_telescope, telescope = pcall(require, "telescope")
-      if has_telescope then
-        telescope.extensions.monorepo.favorites()
-      else
-        utils.notify("Telescope is required for the favorites picker")
-      end
-    end, { desc = "Monorepo: Open favorites picker" })
   end
 
   -- Toggle project

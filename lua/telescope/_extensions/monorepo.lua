@@ -13,6 +13,58 @@ local action_state = require("telescope.actions.state")
 local messages = require("monorepo.messages")
 local utils = require("monorepo.utils")
 
+-- Helper function to build the combined projects list (favorites at top)
+local function build_projects_list()
+  local monorepo_module = require("monorepo")
+  local all_projects = {}
+  local favorites = monorepo_module.get_favorites()
+  local seen = {}
+  
+  -- Add favorites first with star indicator
+  for _, fav in ipairs(favorites) do
+    table.insert(all_projects, "⭐ " .. fav)
+    seen[fav] = true
+  end
+  
+  -- Add separator if there are favorites
+  if #favorites > 0 then
+    table.insert(all_projects, "─────────────────────────")
+  end
+  
+  -- Add all other projects
+  for _, project in ipairs(monorepo_module.currentProjects) do
+    if not seen[project] then
+      table.insert(all_projects, "  " .. project)
+    end
+  end
+  
+  return all_projects
+end
+
+-- Helper function to create entry maker for projects list
+local function create_entry_maker()
+  return function(entry)
+    -- Skip separator line
+    if entry:match("^─+$") then
+      return nil
+    end
+    
+    -- Extract the actual project path (remove star/space prefix)
+    local project_path = entry:match("^%s*(.+)")
+    if project_path:sub(1, 2) == "⭐" then
+      project_path = project_path:sub(3):match("^%s*(.+)")
+    else
+      project_path = project_path:match("^%s*(.+)")
+    end
+    
+    return {
+      value = project_path,
+      display = entry,
+      ordinal = project_path,
+    }
+  end
+end
+
 local function select_project(prompt_bufnr)
   actions.close(prompt_bufnr)
   local selection = action_state.get_selected_entry()
@@ -30,10 +82,12 @@ local function delete_entry(prompt_bufnr)
     return
   end
   require("monorepo").remove_project(selected_entry.value)
-  local monorepo_module = require("monorepo")
+  
+  -- Refresh the picker with updated list
   action_state.get_current_picker(prompt_bufnr):refresh(
     finders.new_table({
-      results = monorepo_module.currentProjects,
+      results = build_projects_list(),
+      entry_maker = create_entry_maker(),
     }),
     { reset_prompt = true }
   )
@@ -41,10 +95,12 @@ end
 
 local function add_entry(prompt_bufnr)
   require("monorepo").prompt_project()
-  local monorepo_module = require("monorepo")
+  
+  -- Refresh the picker with updated list
   action_state.get_current_picker(prompt_bufnr):refresh(
     finders.new_table({
-      results = monorepo_module.currentProjects,
+      results = build_projects_list(),
+      entry_maker = create_entry_maker(),
     }),
     { reset_prompt = true }
   )
@@ -67,18 +123,27 @@ local function toggle_favorite_entry(prompt_bufnr)
       and messages.ADDED_FAVORITE .. ": " .. selected_entry.value
       or messages.REMOVED_FAVORITE .. ": " .. selected_entry.value
   )
+  
+  -- Refresh the picker to update the list
+  action_state.get_current_picker(prompt_bufnr):refresh(
+    finders.new_table({
+      results = build_projects_list(),
+      entry_maker = create_entry_maker(),
+    }),
+    { reset_prompt = true }
+  )
 end
 
 local monorepo = function(opts)
   opts = opts or require("telescope.themes").get_dropdown()
   local monorepo_module = require("monorepo")
   
-  -- Show all projects (no star indicators in main picker)
   pickers
     .new(opts, {
       prompt_title = "Projects - " .. monorepo_module.currentMonorepo,
       finder = finders.new_table({
-        results = monorepo_module.currentProjects,
+        results = build_projects_list(),
+        entry_maker = create_entry_maker(),
       }),
       sorter = conf.file_sorter(opts),
       attach_mappings = function(prompt_bufnr, map)

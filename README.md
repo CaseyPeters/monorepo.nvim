@@ -43,8 +43,7 @@ Install the plugin (This example uses [lazy.nvim](https://github.com/folke/lazy.
   auto_detect = true, -- Auto-detect projects from pnpm-workspace.yaml
   default_keybindings = false, -- Set up default keybindings automatically
   keybindings = {
-    open_projects = "<leader>m", -- Open projects picker
-    open_favorites = "<leader>mf", -- Open favorites picker
+    open_projects = "<leader>m", -- Open projects picker (shows favorites at top)
     toggle_project = "<leader>mn", -- Toggle current project
     next_project = "<leader>m]", -- Navigate to next project
     prev_project = "<leader>m[", -- Navigate to previous project
@@ -80,7 +79,6 @@ require("monorepo").setup({
   default_keybindings = true,
   keybindings = {
     open_projects = "<leader>m",    -- Customize projects picker keybind
-    open_favorites = "<leader>mf",  -- Customize favorites picker keybind
     toggle_project = "<leader>mn",  -- Customize toggle project keybind
     next_project = "<leader>m]",    -- Navigate to next project
     prev_project = "<leader>m[",    -- Navigate to previous project
@@ -94,10 +92,7 @@ require("monorepo").setup({
 vim.keymap.set("n", "<leader>m", function()
   require("telescope").extensions.monorepo.monorepo()
 end)
-vim.keymap.set("n", "<leader>f", function()
-  require("telescope").extensions.monorepo.favorites()
-end)
-vim.keymap.set("n", "<leader>n", function()
+vim.keymap.set("n", "<leader>mn", function()
   require("monorepo").toggle_project()
 end)
 ```
@@ -213,11 +208,11 @@ s  -> toggle_favorite (star/unstar project)
 <ctrl-s> -> toggle_favorite (star/unstar project)
 ```
 
-The main project picker shows all projects. Use the favorites picker to see only your starred projects.
+The main project picker shows all projects with favorites at the top (marked with ⭐), followed by a separator, then all other projects. Use the favorites picker to see only your starred projects.
 
 ### Favorites
 
-You can star your favorite projects for quick access! The favorites picker shows only your starred projects with a ⭐ indicator.
+You can star your favorite projects for quick access! Favorite projects appear at the top of the main projects picker with a ⭐ indicator.
 
 **View your favorites:**
 ```lua
