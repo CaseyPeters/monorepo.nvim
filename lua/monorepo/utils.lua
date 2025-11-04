@@ -164,6 +164,38 @@ M.index_of = function(array, value)
   return nil
 end
 
+-- Format a path to ensure it starts with '/' and is normalized
+-- Handles both Path objects and strings
+---@param path string|table
+---@return string
+M.format_path = function(path)
+  -- Convert Path object to string if needed
+  local path_str = path
+  if type(path) == "table" and path.filename then
+    path_str = path.filename
+  elseif type(path) ~= "string" then
+    path_str = tostring(path)
+  end
+  
+  -- Ensure it's not empty
+  if not path_str or path_str == "" then
+    return "/"
+  end
+  
+  -- Normalize: remove trailing slashes, ensure it starts with /
+  path_str = path_str:gsub("/+$", "") -- Remove trailing slashes
+  if path_str == "" then
+    return "/"
+  end
+  
+  -- Ensure it starts with /
+  if not path_str:match("^/") then
+    path_str = "/" .. path_str
+  end
+  
+  return path_str
+end
+
 -- Get a stable identifier for the repository (for syncing favorites across worktrees)
 -- Returns git root if available, otherwise falls back to monorepo root
 ---@param monorepo_root string
@@ -332,16 +364,27 @@ M.resolve_workspace_patterns = function(monorepo_root, patterns)
         
         if base_path:exists() and base_path:is_dir() then
           -- Scan directory for subdirectories
-          local entries = scan_dir.scan_dir(base_path.filename, {
-            only_dirs = true,
-            depth = 1,
-          })
+          local success, entries = pcall(function()
+            return scan_dir.scan_dir(base_path.filename, {
+              only_dirs = true,
+              depth = 1,
+            })
+          end)
+          
+          if not success or not entries then
+            goto continue_pattern
+          end
           
           local lua_pattern = glob_to_lua_pattern(pattern)
           
           for _, entry in ipairs(entries) do
             local entry_path = Path:new(entry)
             local relative_path = entry_path:make_relative(monorepo_root)
+            
+            -- Skip if relative_path is nil or empty
+            if not relative_path or relative_path == "" then
+              goto continue
+            end
             
             -- Check if it matches the pattern
             if relative_path:match(lua_pattern) then
@@ -355,9 +398,11 @@ M.resolve_workspace_patterns = function(monorepo_root, patterns)
                 end
               end
             end
+            ::continue::
           end
         end
       end
+      ::continue_pattern::
     else
       -- Exact path pattern (no wildcard)
       local exact_path = Path:new(monorepo_root):joinpath(pattern)
@@ -368,19 +413,23 @@ M.resolve_workspace_patterns = function(monorepo_root, patterns)
           local package_json = exact_path:joinpath("package.json")
           if package_json:exists() then
             local relative_path = exact_path:make_relative(monorepo_root)
-            local formatted_path = M.format_path(relative_path)
-            if not seen[formatted_path] then
-              table.insert(resolved_paths, formatted_path)
-              seen[formatted_path] = true
+            if relative_path and relative_path ~= "" then
+              local formatted_path = M.format_path(relative_path)
+              if not seen[formatted_path] then
+                table.insert(resolved_paths, formatted_path)
+                seen[formatted_path] = true
+              end
             end
           end
         elseif exact_path:is_file() then
           -- Single file path (less common but possible)
           local relative_path = exact_path:make_relative(monorepo_root)
-          local formatted_path = M.format_path(relative_path)
-          if not seen[formatted_path] then
-            table.insert(resolved_paths, formatted_path)
-            seen[formatted_path] = true
+          if relative_path and relative_path ~= "" then
+            local formatted_path = M.format_path(relative_path)
+            if not seen[formatted_path] then
+              table.insert(resolved_paths, formatted_path)
+              seen[formatted_path] = true
+            end
           end
         end
       end
