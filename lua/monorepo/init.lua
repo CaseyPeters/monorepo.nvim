@@ -6,6 +6,7 @@ local M = {}
 M.monorepoVars = {}
 M.monorepoFavorites = {}
 M.currentMonorepo = vim.fn.getcwd()
+M.repoIdentifier = nil -- Stable identifier for syncing favorites across worktrees
 
 M.config = {
   silent = false,
@@ -49,6 +50,9 @@ M.setup = function(config)
   
   -- Auto-detect monorepo root from pnpm-workspace.yaml
   M.currentMonorepo = M.detect_monorepo_root()
+  
+  -- Get stable repo identifier for syncing favorites across worktrees
+  M.repoIdentifier = utils.get_repo_identifier(M.currentMonorepo)
   
   utils.load() -- Load monorepo.json
 
@@ -273,6 +277,8 @@ end
 M.change_monorepo = function(path)
   -- Auto-detect monorepo root from the provided path
   M.currentMonorepo = M.detect_monorepo_root(path)
+  -- Update repo identifier for syncing favorites across worktrees
+  M.repoIdentifier = utils.get_repo_identifier(M.currentMonorepo)
   utils.load()
 end
 
@@ -300,12 +306,13 @@ M.add_favorite = function(dir)
     return
   end
 
-  -- Ensure favorites structure exists
-  if not M.monorepoFavorites[M.currentMonorepo] then
-    M.monorepoFavorites[M.currentMonorepo] = {}
+  -- Use repo identifier for syncing across worktrees
+  local repo_id = M.repoIdentifier or M.currentMonorepo
+  if not M.monorepoFavorites[repo_id] then
+    M.monorepoFavorites[repo_id] = {}
   end
 
-  local favorites = M.monorepoFavorites[M.currentMonorepo]
+  local favorites = M.monorepoFavorites[repo_id]
   if vim.tbl_contains(favorites, dir) then
     utils.notify(messages.DUPLICATE_FAVORITE)
     return
@@ -328,7 +335,8 @@ M.remove_favorite = function(dir)
     return
   end
 
-  local favorites = M.monorepoFavorites[M.currentMonorepo] or {}
+  local repo_id = M.repoIdentifier or M.currentMonorepo
+  local favorites = M.monorepoFavorites[repo_id] or {}
   if not vim.tbl_contains(favorites, dir) then
     utils.notify(messages.CANT_REMOVE_FAVORITE)
     return
@@ -351,12 +359,13 @@ M.toggle_favorite = function(dir)
     return
   end
 
-  -- Ensure favorites structure exists
-  if not M.monorepoFavorites[M.currentMonorepo] then
-    M.monorepoFavorites[M.currentMonorepo] = {}
+  -- Use repo identifier for syncing across worktrees
+  local repo_id = M.repoIdentifier or M.currentMonorepo
+  if not M.monorepoFavorites[repo_id] then
+    M.monorepoFavorites[repo_id] = {}
   end
 
-  local favorites = M.monorepoFavorites[M.currentMonorepo]
+  local favorites = M.monorepoFavorites[repo_id]
   if vim.tbl_contains(favorites, dir) then
     table.remove(favorites, utils.index_of(favorites, dir))
     utils.notify(messages.REMOVED_FAVORITE .. ": " .. dir)
@@ -371,12 +380,14 @@ M.toggle_favorite = function(dir)
 end
 
 M.is_favorite = function(dir)
-  local favorites = M.monorepoFavorites[M.currentMonorepo] or {}
+  local repo_id = M.repoIdentifier or M.currentMonorepo
+  local favorites = M.monorepoFavorites[repo_id] or {}
   return vim.tbl_contains(favorites, dir)
 end
 
 M.get_favorites = function()
-  return M.monorepoFavorites[M.currentMonorepo] or {}
+  local repo_id = M.repoIdentifier or M.currentMonorepo
+  return M.monorepoFavorites[repo_id] or {}
 end
 
 return M

@@ -63,15 +63,47 @@ M.load = function()
     if not module.monorepoVars[module.currentMonorepo] then
       module.monorepoVars[module.currentMonorepo] = { "/" }
     end
-    -- Initialize favorites if not present
-    if not module.monorepoFavorites[module.currentMonorepo] then
-      module.monorepoFavorites[module.currentMonorepo] = {}
+    
+    -- Handle favorites migration and syncing across worktrees
+    local repo_id = module.repoIdentifier or module.currentMonorepo
+    
+    -- Migrate favorites from old monorepo path to repo identifier if needed
+    if module.monorepoFavorites[module.currentMonorepo] and not module.monorepoFavorites[repo_id] then
+      -- Copy favorites from monorepo path to repo identifier
+      module.monorepoFavorites[repo_id] = module.monorepoFavorites[module.currentMonorepo]
+    end
+    
+    -- Also check if there are favorites for git root that we should merge
+    local git_root = M.find_git_root(module.currentMonorepo)
+    if git_root and git_root ~= module.currentMonorepo and module.monorepoFavorites[git_root] then
+      -- Merge favorites from git root (might be from another worktree)
+      if not module.monorepoFavorites[repo_id] then
+        module.monorepoFavorites[repo_id] = {}
+      end
+      local existing_favs = module.monorepoFavorites[repo_id]
+      local seen = {}
+      for _, fav in ipairs(existing_favs) do
+        seen[fav] = true
+      end
+      for _, fav in ipairs(module.monorepoFavorites[git_root]) do
+        if not seen[fav] then
+          table.insert(existing_favs, fav)
+          seen[fav] = true
+        end
+      end
+      module.monorepoFavorites[repo_id] = existing_favs
+    end
+    
+    -- Initialize favorites if not present (use repo identifier for syncing across worktrees)
+    if not module.monorepoFavorites[repo_id] then
+      module.monorepoFavorites[repo_id] = {}
     end
   else
     module.monorepoVars = {}
     module.monorepoVars[module.currentMonorepo] = { "/" }
     module.monorepoFavorites = {}
-    module.monorepoFavorites[module.currentMonorepo] = {}
+    local repo_id = module.repoIdentifier or module.currentMonorepo
+    module.monorepoFavorites[repo_id] = {}
   end
 
   -- Auto-detect projects from pnpm-workspace.yaml if enabled
@@ -100,7 +132,8 @@ M.load = function()
   end
 
   module.currentProjects = module.monorepoVars[module.currentMonorepo]
-  module.currentFavorites = module.monorepoFavorites[module.currentMonorepo] or {}
+  local repo_id = module.repoIdentifier or module.currentMonorepo
+  module.currentFavorites = module.monorepoFavorites[repo_id] or {}
 end
 
 -- Extend vim.notify to include silent option
@@ -120,16 +153,70 @@ M.index_of = function(array, value)
   return nil
 end
 
-M.format_path = function(path)
-  -- Remove leading ./ and add leading /
-  if path:sub(1, 2) == "./" then
-    path = path:sub(2)
+-- Get a stable identifier for the repository (for syncing favorites across worktrees)
+-- Returns git root if available, otherwise falls back to monorepo root
+---@param monorepo_root string
+---@return string
+M.get_repo_identifier = function(monorepo_root)
+  local git_root = M.find_git_root(monorepo_root)
+  -- Use git root if available (for worktree syncing), otherwise use monorepo root
+  return git_root or monorepo_root
+end
+
+-- Find git repository root by walking up the directory tree
+-- This handles git worktrees where .git might be a file pointing to the common git dir
+---@param start_path string|nil
+---@return string|nil
+M.find_git_root = function(start_path)
+  start_path = start_path or vim.fn.getcwd()
+  local current = Path:new(start_path)
+  
+  while current:exists() do
+    local git_dir = current:joinpath(".git")
+    
+    -- Check if .git exists
+    if git_dir:exists() then
+      -- If it's a file, read it to get the gitdir path (for worktrees)
+      if git_dir:is_file() then
+        local gitdir_content = git_dir:read()
+        if gitdir_content then
+          -- Extract path from gitdir: gitdir: /path/to/.git/worktrees/worktree-name
+          local gitdir_path = gitdir_content:match("gitdir:%s*(.+)")
+          if gitdir_path then
+            gitdir_path = gitdir_path:gsub("^%s+", ""):gsub("%s+$", "")
+            -- The common git dir is the parent of worktrees directory
+            -- /path/to/.git/worktrees/worktree-name -> /path/to/.git
+            local git_common_path = Path:new(gitdir_path)
+            -- Go up until we find .git directory (should be at worktrees/..)
+            for _ = 1, 10 do -- Safety limit
+              if git_common_path.filename:match("/%.git$") or git_common_path:joinpath("HEAD"):exists() then
+                -- Return the parent of .git (the repository root)
+                return git_common_path:parent().filename
+              end
+              local parent = git_common_path:parent()
+              if parent.filename == git_common_path.filename then
+                break
+              end
+              git_common_path = parent
+            end
+          end
+        end
+      end
+      
+      -- If .git is a directory, return current (repository root)
+      if git_dir:is_dir() then
+        return current.filename
+      end
+    end
+    
+    local parent = current:parent()
+    if not parent or parent.filename == current.filename then
+      break
+    end
+    current = parent
   end
-  -- Add leading /
-  if path:sub(1, 1) ~= "/" then
-    path = "/" .. path
-  end
-  return path
+  
+  return nil
 end
 
 -- Find pnpm-workspace.yaml by walking up the directory tree
