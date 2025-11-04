@@ -153,7 +153,13 @@ local function toggle_favorite_entry(prompt_bufnr)
 end
 
 local monorepo = function(opts)
-  opts = opts or require("telescope.themes").get_dropdown()
+  -- Default to a larger dropdown theme if no opts provided
+  if not opts then
+    opts = require("telescope.themes").get_dropdown({
+      width = 0.9,  -- 90% of screen width (default is ~0.8)
+      preview_height = 25,  -- Show more lines in preview (default is ~15)
+    })
+  end
   local monorepo_module = require("monorepo")
   
   pickers
@@ -178,7 +184,13 @@ local monorepo = function(opts)
 end
 
 local favorites = function(opts)
-  opts = opts or require("telescope.themes").get_dropdown()
+  -- Default to a larger dropdown theme if no opts provided
+  if not opts then
+    opts = require("telescope.themes").get_dropdown({
+      width = 0.9,  -- 90% of screen width (default is ~0.8)
+      preview_height = 25,  -- Show more lines in preview (default is ~15)
+    })
+  end
   local monorepo_module = require("monorepo")
   local favs = monorepo_module.get_favorites()
   
