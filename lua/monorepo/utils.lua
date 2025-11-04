@@ -64,6 +64,11 @@ M.load = function()
       module.monorepoVars[module.currentMonorepo] = { "/" }
     end
     
+    -- Calculate repo identifier if not already set (for worktree syncing)
+    if not module.repoIdentifier then
+      module.repoIdentifier = M.get_repo_identifier(module.currentMonorepo)
+    end
+    
     -- Handle favorites migration and syncing across worktrees
     local repo_id = module.repoIdentifier or module.currentMonorepo
     
@@ -74,8 +79,10 @@ M.load = function()
     end
     
     -- Also check if there are favorites for git root that we should merge
-    local git_root = M.find_git_root(module.currentMonorepo)
-    if git_root and git_root ~= module.currentMonorepo and module.monorepoFavorites[git_root] then
+    local success, git_root = pcall(function()
+      return M.find_git_root(module.currentMonorepo)
+    end)
+    if success and git_root and git_root ~= module.currentMonorepo and module.monorepoFavorites[git_root] then
       -- Merge favorites from git root (might be from another worktree)
       if not module.monorepoFavorites[repo_id] then
         module.monorepoFavorites[repo_id] = {}
@@ -102,6 +109,10 @@ M.load = function()
     module.monorepoVars = {}
     module.monorepoVars[module.currentMonorepo] = { "/" }
     module.monorepoFavorites = {}
+    -- Calculate repo identifier if not already set
+    if not module.repoIdentifier then
+      module.repoIdentifier = M.get_repo_identifier(module.currentMonorepo)
+    end
     local repo_id = module.repoIdentifier or module.currentMonorepo
     module.monorepoFavorites[repo_id] = {}
   end
@@ -158,9 +169,11 @@ end
 ---@param monorepo_root string
 ---@return string
 M.get_repo_identifier = function(monorepo_root)
-  local git_root = M.find_git_root(monorepo_root)
+  local success, git_root = pcall(function()
+    return M.find_git_root(monorepo_root)
+  end)
   -- Use git root if available (for worktree syncing), otherwise use monorepo root
-  return git_root or monorepo_root
+  return (success and git_root) or monorepo_root
 end
 
 -- Find git repository root by walking up the directory tree
