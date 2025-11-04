@@ -41,6 +41,14 @@ Install the plugin (This example uses [lazy.nvim](https://github.com/folke/lazy.
   autoload_telescope = true, -- Automatically loads the telescope extension at setup
   data_path = vim.fn.stdpath("data"), -- Path that monorepo.json gets saved to
   auto_detect = true, -- Auto-detect projects from pnpm-workspace.yaml
+  default_keybindings = false, -- Set up default keybindings automatically
+  keybindings = {
+    open_projects = "<leader>m", -- Open projects picker
+    open_favorites = "<leader>mf", -- Open favorites picker
+    toggle_project = "<leader>mn", -- Toggle current project
+    next_project = "<leader>m]", -- Navigate to next project
+    prev_project = "<leader>m[", -- Navigate to previous project
+  },
 }
 ```
 
@@ -53,7 +61,34 @@ This is the snippet you'll need to run to load the extension if doing it manuall
 require("telescope").load_extension("monorepo")
 ```
 
-Set up your keybinds!
+### Keybindings
+
+You can set up keybindings in two ways:
+
+**Option 1: Enable default keybindings automatically**
+
+```lua
+require("monorepo").setup({
+  default_keybindings = true,
+})
+```
+
+This will automatically set up keybindings using the default keybindings table. You can customize them:
+
+```lua
+require("monorepo").setup({
+  default_keybindings = true,
+  keybindings = {
+    open_projects = "<leader>m",    -- Customize projects picker keybind
+    open_favorites = "<leader>mf",  -- Customize favorites picker keybind
+    toggle_project = "<leader>mn",  -- Customize toggle project keybind
+    next_project = "<leader>m]",    -- Navigate to next project
+    prev_project = "<leader>m[",    -- Navigate to previous project
+  },
+})
+```
+
+**Option 2: Set up keybindings manually**
 
 ```lua
 vim.keymap.set("n", "<leader>m", function()
@@ -66,6 +101,8 @@ vim.keymap.set("n", "<leader>n", function()
   require("monorepo").toggle_project()
 end)
 ```
+
+To disable a specific keybinding, set it to `nil` in the keybindings table.
 
 ## Usage (These can be mapped to keybinds)
 

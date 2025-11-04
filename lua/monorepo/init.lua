@@ -12,6 +12,17 @@ M.config = {
   autoload_telescope = true,
   data_path = vim.fn.stdpath("data"),
   auto_detect = true, -- Auto-detect projects from pnpm-workspace.yaml
+  default_keybindings = false, -- Set up default keybindings automatically
+  keybindings = {
+    -- Telescope pickers
+    open_projects = "<leader>m", -- Open projects picker
+    open_favorites = "<leader>mf", -- Open favorites picker
+    -- Project management
+    toggle_project = "<leader>mn", -- Toggle current project
+    -- Navigation (optional, can be disabled by setting to nil)
+    next_project = "<leader>m]", -- Navigate to next project
+    prev_project = "<leader>m[", -- Navigate to previous project
+  },
 }
 
 ---@class pluginConfig
@@ -19,12 +30,19 @@ M.config = {
 ---@field autoload_telescope boolean
 ---@field data_path string
 ---@field auto_detect boolean
+---@field default_keybindings boolean
+---@field keybindings table|nil
 ---@param config? pluginConfig
 M.setup = function(config)
   -- Overwrite default config with user config
   if config then
     for k, v in pairs(config) do
-      M.config[k] = v
+      if k == "keybindings" and type(v) == "table" then
+        -- Deep merge keybindings table
+        M.config.keybindings = vim.tbl_deep_extend("force", M.config.keybindings, v)
+      else
+        M.config[k] = v
+      end
     end
   end
 
@@ -50,6 +68,61 @@ M.setup = function(config)
       M.change_monorepo(vim.fn.getcwd())
     end,
   })
+
+  -- Set up default keybindings if enabled
+  if M.config.default_keybindings then
+    M.setup_keybindings()
+  end
+end
+
+-- Set up default keybindings
+M.setup_keybindings = function()
+  local kb = M.config.keybindings
+
+  -- Open projects picker
+  if kb.open_projects then
+    vim.keymap.set("n", kb.open_projects, function()
+      local has_telescope, telescope = pcall(require, "telescope")
+      if has_telescope then
+        telescope.extensions.monorepo.monorepo()
+      else
+        utils.notify("Telescope is required for the projects picker")
+      end
+    end, { desc = "Monorepo: Open projects picker" })
+  end
+
+  -- Open favorites picker
+  if kb.open_favorites then
+    vim.keymap.set("n", kb.open_favorites, function()
+      local has_telescope, telescope = pcall(require, "telescope")
+      if has_telescope then
+        telescope.extensions.monorepo.favorites()
+      else
+        utils.notify("Telescope is required for the favorites picker")
+      end
+    end, { desc = "Monorepo: Open favorites picker" })
+  end
+
+  -- Toggle project
+  if kb.toggle_project then
+    vim.keymap.set("n", kb.toggle_project, function()
+      M.toggle_project()
+    end, { desc = "Monorepo: Toggle current project" })
+  end
+
+  -- Navigate to next project
+  if kb.next_project then
+    vim.keymap.set("n", kb.next_project, function()
+      M.next_project()
+    end, { desc = "Monorepo: Go to next project" })
+  end
+
+  -- Navigate to previous project
+  if kb.prev_project then
+    vim.keymap.set("n", kb.prev_project, function()
+      M.previous_project()
+    end, { desc = "Monorepo: Go to previous project" })
+  end
 end
 
 -- If no dir is passed, it will use the current buffer's directory
