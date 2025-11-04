@@ -15,7 +15,7 @@ M.config = {
   default_keybindings = false, -- Set up default keybindings automatically
   keybindings = {
     -- Telescope pickers
-    open_projects = "<leader>m", -- Open projects picker (shows favorites at top)
+    open_projects = "<leader>mm", -- Open projects picker (shows favorites at top)
     -- Project management
     toggle_project = "<leader>mn", -- Toggle current project
     -- Navigation (optional, can be disabled by setting to nil)
