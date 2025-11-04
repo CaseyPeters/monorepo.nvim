@@ -50,10 +50,14 @@ local function create_entry_maker()
     end
     
     -- Extract the actual project path (remove star/space prefix)
+    -- Handle star emoji properly (it's a multi-byte character)
     local project_path = entry:match("^%s*(.+)")
-    if project_path:sub(1, 2) == "⭐" then
-      project_path = project_path:sub(3):match("^%s*(.+)")
+    -- Check if it starts with star emoji (using pattern matching instead of substring)
+    if project_path:match("^⭐%s*") then
+      -- Remove star emoji and any following spaces
+      project_path = project_path:gsub("^⭐%s*", "")
     else
+      -- Remove leading spaces
       project_path = project_path:match("^%s*(.+)")
     end
     

@@ -265,15 +265,19 @@ See an example from my own config below:
 ```lua
 require("telescope").setup({
   extensions = {
-    project = {
+    monorepo = {
       on_project_selected = function(prompt_bufnr)
-        -- Change dir to the selected project
-        project_actions.change_working_directory(prompt_bufnr, false)
-
-        -- Change monorepo directory to the selected project
+        local action_state = require("telescope.actions.state")
+        local actions = require("telescope.actions")
         local selected_entry = action_state.get_selected_entry(prompt_bufnr)
-        require("monorepo").change_monorepo(selected_entry.value)
-
+        
+        -- Change dir to the selected project
+        vim.api.nvim_set_current_dir(require("monorepo").currentMonorepo .. "/" .. selected_entry.value)
+        
+        -- Close the picker
+        actions.close(prompt_bufnr)
+        
+        -- Open find_files in the new directory
         require("telescope.builtin").find_files()
       end,
     }
