@@ -4,6 +4,7 @@ local messages = require("monorepo.messages")
 local M = {}
 
 M.monorepoVars = {}
+M.monorepoFavorites = {}
 M.currentMonorepo = vim.fn.getcwd()
 
 M.config = {
@@ -224,6 +225,98 @@ M.detect_monorepo_root = function(start_path)
     return Path:new(workspace_file):parent().filename
   end
   return start_path
+end
+
+-- Favorite management functions
+M.add_favorite = function(dir)
+  if dir and dir:sub(1, 1) ~= "/" then
+    utils.notify(messages.INVALID_PATH)
+    return
+  end
+
+  dir = dir or utils.get_project_directory(vim.api.nvim_buf_get_name(0), vim.bo.filetype == "netrw")
+  if not dir or dir == "" then
+    utils.notify(messages.NOT_IN_SUBPROJECT)
+    return
+  end
+
+  -- Ensure favorites structure exists
+  if not M.monorepoFavorites[M.currentMonorepo] then
+    M.monorepoFavorites[M.currentMonorepo] = {}
+  end
+
+  local favorites = M.monorepoFavorites[M.currentMonorepo]
+  if vim.tbl_contains(favorites, dir) then
+    utils.notify(messages.DUPLICATE_FAVORITE)
+    return
+  end
+
+  table.insert(favorites, dir)
+  utils.notify(messages.ADDED_FAVORITE .. ": " .. dir)
+  utils.save()
+end
+
+M.remove_favorite = function(dir)
+  if dir and dir:sub(1, 1) ~= "/" then
+    utils.notify(messages.INVALID_PATH)
+    return
+  end
+
+  dir = dir or utils.get_project_directory(vim.api.nvim_buf_get_name(0), vim.bo.filetype == "netrw")
+  if not dir or dir == "" then
+    utils.notify(messages.NOT_IN_SUBPROJECT)
+    return
+  end
+
+  local favorites = M.monorepoFavorites[M.currentMonorepo] or {}
+  if not vim.tbl_contains(favorites, dir) then
+    utils.notify(messages.CANT_REMOVE_FAVORITE)
+    return
+  end
+
+  table.remove(favorites, utils.index_of(favorites, dir))
+  utils.notify(messages.REMOVED_FAVORITE .. ": " .. dir)
+  utils.save()
+end
+
+M.toggle_favorite = function(dir)
+  if dir and dir:sub(1, 1) ~= "/" then
+    utils.notify(messages.INVALID_PATH)
+    return
+  end
+
+  dir = dir or utils.get_project_directory(vim.api.nvim_buf_get_name(0), vim.bo.filetype == "netrw")
+  if not dir or dir == "" then
+    utils.notify(messages.NOT_IN_SUBPROJECT)
+    return
+  end
+
+  -- Ensure favorites structure exists
+  if not M.monorepoFavorites[M.currentMonorepo] then
+    M.monorepoFavorites[M.currentMonorepo] = {}
+  end
+
+  local favorites = M.monorepoFavorites[M.currentMonorepo]
+  if vim.tbl_contains(favorites, dir) then
+    table.remove(favorites, utils.index_of(favorites, dir))
+    utils.notify(messages.REMOVED_FAVORITE .. ": " .. dir)
+    utils.save()
+    return
+  else
+    table.insert(favorites, dir)
+    utils.notify(messages.ADDED_FAVORITE .. ": " .. dir)
+    utils.save()
+    return
+  end
+end
+
+M.is_favorite = function(dir)
+  local favorites = M.monorepoFavorites[M.currentMonorepo] or {}
+  return vim.tbl_contains(favorites, dir)
+end
+
+M.get_favorites = function()
+  return M.monorepoFavorites[M.currentMonorepo] or {}
 end
 
 return M

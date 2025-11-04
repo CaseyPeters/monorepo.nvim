@@ -25,12 +25,17 @@ M.get_project_directory = function(file, netrw)
   end
 end
 
--- Save monorepoVars to data_path/monorepo.json
+-- Save monorepoVars and favorites to data_path/monorepo.json
 M.save = function()
-  local monorepoVars = require("monorepo").monorepoVars
-  local data_path = require("monorepo").config.data_path
+  local module = require("monorepo")
+  local data_path = module.config.data_path
   local persistent_json = data_path .. "/monorepo.json"
-  Path:new(persistent_json):write(vim.fn.json_encode(monorepoVars), "w")
+  -- Save both projects and favorites
+  local save_data = {
+    projects = module.monorepoVars,
+    favorites = module.monorepoFavorites,
+  }
+  Path:new(persistent_json):write(vim.fn.json_encode(save_data), "w")
 end
 
 -- Load json file from data_path/monorepo.json into init module.
@@ -44,13 +49,29 @@ M.load = function()
   end, persistent_json)
 
   if status and load then
-    module.monorepoVars = load
+    -- Handle old format (just projects) and new format (projects + favorites)
+    if load.projects then
+      -- New format
+      module.monorepoVars = load.projects
+      module.monorepoFavorites = load.favorites or {}
+    else
+      -- Old format - migrate
+      module.monorepoVars = load
+      module.monorepoFavorites = {}
+    end
+    
     if not module.monorepoVars[module.currentMonorepo] then
       module.monorepoVars[module.currentMonorepo] = { "/" }
+    end
+    -- Initialize favorites if not present
+    if not module.monorepoFavorites[module.currentMonorepo] then
+      module.monorepoFavorites[module.currentMonorepo] = {}
     end
   else
     module.monorepoVars = {}
     module.monorepoVars[module.currentMonorepo] = { "/" }
+    module.monorepoFavorites = {}
+    module.monorepoFavorites[module.currentMonorepo] = {}
   end
 
   -- Auto-detect projects from pnpm-workspace.yaml if enabled
@@ -79,6 +100,7 @@ M.load = function()
   end
 
   module.currentProjects = module.monorepoVars[module.currentMonorepo]
+  module.currentFavorites = module.monorepoFavorites[module.currentMonorepo] or {}
 end
 
 -- Extend vim.notify to include silent option
