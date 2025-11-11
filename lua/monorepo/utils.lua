@@ -3,150 +3,6 @@ local scan_dir = require("plenary.scandir")
 
 local M = {}
 
--- Get the relative directory of path param,
----@param file string
----@param netrw boolean
----@return string|nil
-M.get_project_directory = function(file, netrw)
-  local currentMonorepo = require("monorepo").currentMonorepo
-  local idx = string.find(file, currentMonorepo, 1, true)
-  if idx then
-    local relative_path = string.sub(file, idx + #currentMonorepo + 0)
-    -- If netrw then string is already a diretory
-    if netrw then
-      return relative_path
-    end
-    -- If not netrw then remove filename from string
-    local project_directory = string.match(relative_path, "(.-)[^/]+$") -- remove filename
-    project_directory = project_directory:sub(1, -2) -- remove trailing slash
-    return project_directory
-  else
-    return nil
-  end
-end
-
--- Save monorepoVars and favorites to data_path/monorepo.json
-M.save = function()
-  local module = require("monorepo")
-  local data_path = module.config.data_path
-  local persistent_json = data_path .. "/monorepo.json"
-  -- Save both projects and favorites
-  local save_data = {
-    projects = module.monorepoVars,
-    favorites = module.monorepoFavorites,
-  }
-  Path:new(persistent_json):write(vim.fn.json_encode(save_data), "w")
-end
-
--- Load json file from data_path/monorepo.json into init module.
----@return boolean, table|nil
-M.load = function()
-  local module = require("monorepo")
-  local data_path = module.config.data_path
-  local persistent_json = data_path .. "/monorepo.json"
-  local status, load = pcall(function()
-    return vim.json.decode(Path:new(persistent_json):read())
-  end, persistent_json)
-
-  if status and load then
-    -- Handle old format (just projects) and new format (projects + favorites)
-    if load.projects then
-      -- New format
-      module.monorepoVars = load.projects
-      module.monorepoFavorites = load.favorites or {}
-    else
-      -- Old format - migrate
-      module.monorepoVars = load
-      module.monorepoFavorites = {}
-    end
-    
-    if not module.monorepoVars[module.currentMonorepo] then
-      module.monorepoVars[module.currentMonorepo] = { "/" }
-    end
-    
-    -- Calculate repo identifier if not already set (for worktree syncing)
-    if not module.repoIdentifier then
-      module.repoIdentifier = M.get_repo_identifier(module.currentMonorepo)
-    end
-    
-    -- Handle favorites migration and syncing across worktrees
-    local repo_id = module.repoIdentifier or module.currentMonorepo
-    
-    -- Migrate favorites from old monorepo path to repo identifier if needed
-    if module.monorepoFavorites[module.currentMonorepo] and not module.monorepoFavorites[repo_id] then
-      -- Copy favorites from monorepo path to repo identifier
-      module.monorepoFavorites[repo_id] = module.monorepoFavorites[module.currentMonorepo]
-    end
-    
-    -- Also check if there are favorites for git root that we should merge
-    local success, git_root = pcall(function()
-      return M.find_git_root(module.currentMonorepo)
-    end)
-    if success and git_root and git_root ~= module.currentMonorepo and module.monorepoFavorites[git_root] then
-      -- Merge favorites from git root (might be from another worktree)
-      if not module.monorepoFavorites[repo_id] then
-        module.monorepoFavorites[repo_id] = {}
-      end
-      local existing_favs = module.monorepoFavorites[repo_id]
-      local seen = {}
-      for _, fav in ipairs(existing_favs) do
-        seen[fav] = true
-      end
-      for _, fav in ipairs(module.monorepoFavorites[git_root]) do
-        if not seen[fav] then
-          table.insert(existing_favs, fav)
-          seen[fav] = true
-        end
-      end
-      module.monorepoFavorites[repo_id] = existing_favs
-    end
-    
-    -- Initialize favorites if not present (use repo identifier for syncing across worktrees)
-    if not module.monorepoFavorites[repo_id] then
-      module.monorepoFavorites[repo_id] = {}
-    end
-  else
-    module.monorepoVars = {}
-    module.monorepoVars[module.currentMonorepo] = { "/" }
-    module.monorepoFavorites = {}
-    -- Calculate repo identifier if not already set
-    if not module.repoIdentifier then
-      module.repoIdentifier = M.get_repo_identifier(module.currentMonorepo)
-    end
-    local repo_id = module.repoIdentifier or module.currentMonorepo
-    module.monorepoFavorites[repo_id] = {}
-  end
-
-  -- Auto-detect projects from pnpm-workspace.yaml if enabled
-  if module.config.auto_detect then
-    local detected_projects = M.auto_detect_projects(module.currentMonorepo)
-    if detected_projects and #detected_projects > 0 then
-      -- Merge detected projects with existing ones (avoid duplicates)
-      local existing_projects = module.monorepoVars[module.currentMonorepo] or { "/" }
-      local seen = {}
-      
-      -- Mark existing projects
-      for _, proj in ipairs(existing_projects) do
-        seen[proj] = true
-      end
-      
-      -- Add detected projects that aren't already in the list
-      for _, proj in ipairs(detected_projects) do
-        if not seen[proj] then
-          table.insert(existing_projects, proj)
-          seen[proj] = true
-        end
-      end
-      
-      module.monorepoVars[module.currentMonorepo] = existing_projects
-    end
-  end
-
-  module.currentProjects = module.monorepoVars[module.currentMonorepo]
-  local repo_id = module.repoIdentifier or module.currentMonorepo
-  module.currentFavorites = module.monorepoFavorites[repo_id] or {}
-end
-
 -- Extend vim.notify to include silent option
 M.notify = function(message)
   if require("monorepo").config.silent then
@@ -155,113 +11,26 @@ M.notify = function(message)
   vim.notify(message)
 end
 
-M.index_of = function(array, value)
-  for i, v in ipairs(array) do
-    if v == value then
-      return i
-    end
-  end
-  return nil
-end
-
 -- Format a path to ensure it starts with '/' and is normalized
--- Handles both Path objects and strings
----@param path string|table
+---@param path string
 ---@return string
 M.format_path = function(path)
-  -- Convert Path object to string if needed
-  local path_str = path
-  if type(path) == "table" and path.filename then
-    path_str = path.filename
-  elseif type(path) ~= "string" then
-    path_str = tostring(path)
-  end
-  
-  -- Ensure it's not empty
-  if not path_str or path_str == "" then
+  if not path or path == "" then
     return "/"
   end
   
-  -- Normalize: remove trailing slashes, ensure it starts with /
-  path_str = path_str:gsub("/+$", "") -- Remove trailing slashes
-  if path_str == "" then
+  -- Remove trailing slashes
+  path = path:gsub("/+$", "")
+  if path == "" then
     return "/"
   end
   
   -- Ensure it starts with /
-  if not path_str:match("^/") then
-    path_str = "/" .. path_str
+  if not path:match("^/") then
+    path = "/" .. path
   end
   
-  return path_str
-end
-
--- Get a stable identifier for the repository (for syncing favorites across worktrees)
--- Returns git root if available, otherwise falls back to monorepo root
----@param monorepo_root string
----@return string
-M.get_repo_identifier = function(monorepo_root)
-  local success, git_root = pcall(function()
-    return M.find_git_root(monorepo_root)
-  end)
-  -- Use git root if available (for worktree syncing), otherwise use monorepo root
-  return (success and git_root) or monorepo_root
-end
-
--- Find git repository root by walking up the directory tree
--- This handles git worktrees where .git might be a file pointing to the common git dir
----@param start_path string|nil
----@return string|nil
-M.find_git_root = function(start_path)
-  start_path = start_path or vim.fn.getcwd()
-  local current = Path:new(start_path)
-  
-  while current:exists() do
-    local git_dir = current:joinpath(".git")
-    
-    -- Check if .git exists
-    if git_dir:exists() then
-      -- If it's a file, read it to get the gitdir path (for worktrees)
-      if git_dir:is_file() then
-        local gitdir_content = git_dir:read()
-        if gitdir_content then
-          -- Extract path from gitdir: gitdir: /path/to/.git/worktrees/worktree-name
-          local gitdir_path = gitdir_content:match("gitdir:%s*(.+)")
-          if gitdir_path then
-            gitdir_path = gitdir_path:gsub("^%s+", ""):gsub("%s+$", "")
-            -- The common git dir is the parent of worktrees directory
-            -- /path/to/.git/worktrees/worktree-name -> /path/to/.git
-            local git_common_path = Path:new(gitdir_path)
-            -- Go up until we find .git directory (should be at worktrees/..)
-            for _ = 1, 10 do -- Safety limit
-              if git_common_path.filename:match("/%.git$") or git_common_path:joinpath("HEAD"):exists() then
-                -- Return the parent of .git (the repository root)
-                return git_common_path:parent().filename
-              end
-              local parent = git_common_path:parent()
-              if parent.filename == git_common_path.filename then
-                break
-              end
-              git_common_path = parent
-            end
-          end
-        end
-      end
-      
-      -- If .git is a directory, return current (repository root)
-      if git_dir:is_dir() then
-        return current.filename
-      end
-    end
-    
-    local parent = current:parent()
-    if not parent or parent.filename == current.filename then
-      break
-    end
-    current = parent
-  end
-  
-  return nil
+  return path
 end
 
 -- Find pnpm-workspace.yaml by walking up the directory tree
@@ -335,110 +104,70 @@ M.resolve_workspace_patterns = function(monorepo_root, patterns)
   local resolved_paths = {}
   local seen = {}
   
-  -- Helper function to escape special characters for lua pattern matching
-  local function escape_pattern(str)
-    return str:gsub("[%(%)%.%+%-%*%?%[%]%^%$%%]", "%%%0")
+  -- Helper: Check if directory is a valid package (has package.json)
+  local function is_valid_package(dir_path)
+    return dir_path:joinpath("package.json"):exists()
   end
   
-  -- Helper function to convert glob pattern to lua pattern
+  -- Helper: Add path to results if valid
+  local function add_if_valid(dir_path)
+    if not is_valid_package(dir_path) then
+      return
+    end
+    
+    local relative_path = dir_path:make_relative(monorepo_root)
+    if not relative_path or relative_path == "" then
+      return
+    end
+    
+    local formatted_path = M.format_path(relative_path)
+    if not seen[formatted_path] then
+      table.insert(resolved_paths, formatted_path)
+      seen[formatted_path] = true
+    end
+  end
+  
+  -- Helper: Convert glob pattern to lua pattern
   local function glob_to_lua_pattern(glob)
-    -- Escape all special characters first, then replace * with .*
-    local escaped = escape_pattern(glob)
-    -- Replace escaped \* with .*
-    escaped = escaped:gsub("%%%*", ".*")
-    return "^" .. escaped .. "$"
+    return "^" .. glob:gsub("[%(%)%.%+%-%*%?%[%]%^%$%%]", "%%%0"):gsub("%%%*", ".*") .. "$"
   end
   
   for _, pattern in ipairs(patterns) do
     -- Remove quotes if present
     pattern = pattern:gsub("^['\"](.+)['\"]$", "%1")
     
-    -- Check if pattern contains wildcard
-    local has_wildcard = pattern:match("%*")
-    
-    if has_wildcard then
-      -- Pattern with wildcard: e.g., 'apps/*'
+    if pattern:match("%*") then
+      -- Wildcard pattern: e.g., 'apps/*'
       local base_dir = pattern:match("^(.+)/%*$")
       if base_dir then
         local base_path = Path:new(monorepo_root):joinpath(base_dir)
-        
         if base_path:exists() and base_path:is_dir() then
-          -- Scan directory for subdirectories
           local success, entries = pcall(function()
-            return scan_dir.scan_dir(base_path.filename, {
-              only_dirs = true,
-              depth = 1,
-            })
+            return scan_dir.scan_dir(base_path.filename, { only_dirs = true, depth = 1 })
           end)
           
-          if not success or not entries then
-            goto continue_pattern
-          end
-          
-          local lua_pattern = glob_to_lua_pattern(pattern)
-          
-          for _, entry in ipairs(entries) do
-            local entry_path = Path:new(entry)
-            local relative_path = entry_path:make_relative(monorepo_root)
-            
-            -- Skip if relative_path is nil or empty
-            if not relative_path or relative_path == "" then
-              goto continue
-            end
-            
-            -- Check if it matches the pattern
-            if relative_path:match(lua_pattern) then
-              -- Check if it has a package.json (indicating it's a package)
-              local package_json = entry_path:joinpath("package.json")
-              if package_json:exists() then
-                local formatted_path = M.format_path(relative_path)
-                if not seen[formatted_path] then
-                  table.insert(resolved_paths, formatted_path)
-                  seen[formatted_path] = true
-                end
+          if success and entries then
+            local lua_pattern = glob_to_lua_pattern(pattern)
+            for _, entry in ipairs(entries) do
+              local entry_path = Path:new(entry)
+              local relative_path = entry_path:make_relative(monorepo_root)
+              if relative_path and relative_path:match(lua_pattern) then
+                add_if_valid(entry_path)
               end
             end
-            ::continue::
           end
         end
       end
-      ::continue_pattern::
     else
-      -- Exact path pattern (no wildcard)
+      -- Exact path pattern
       local exact_path = Path:new(monorepo_root):joinpath(pattern)
-      
-      if exact_path:exists() then
-        if exact_path:is_dir() then
-          -- Check if it has a package.json (indicating it's a package)
-          local package_json = exact_path:joinpath("package.json")
-          if package_json:exists() then
-            local relative_path = exact_path:make_relative(monorepo_root)
-            if relative_path and relative_path ~= "" then
-              local formatted_path = M.format_path(relative_path)
-              if not seen[formatted_path] then
-                table.insert(resolved_paths, formatted_path)
-                seen[formatted_path] = true
-              end
-            end
-          end
-        elseif exact_path:is_file() then
-          -- Single file path (less common but possible)
-          local relative_path = exact_path:make_relative(monorepo_root)
-          if relative_path and relative_path ~= "" then
-            local formatted_path = M.format_path(relative_path)
-            if not seen[formatted_path] then
-              table.insert(resolved_paths, formatted_path)
-              seen[formatted_path] = true
-            end
-          end
-        end
+      if exact_path:exists() and exact_path:is_dir() then
+        add_if_valid(exact_path)
       end
     end
   end
   
-  -- Sort paths for consistency
   table.sort(resolved_paths)
-  
   return resolved_paths
 end
 
