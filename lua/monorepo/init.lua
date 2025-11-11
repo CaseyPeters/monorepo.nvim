@@ -10,13 +10,11 @@ M.currentProjects = {}
 M.config = {
   silent = false,
   autoload_telescope = true,
-  auto_detect = true, -- Auto-detect projects from pnpm-workspace.yaml
 }
 
 ---@class pluginConfig
 ---@field silent boolean
 ---@field autoload_telescope boolean
----@field auto_detect boolean
 ---@param config? pluginConfig
 M.setup = function(config)
   -- Overwrite default config with user config
@@ -53,29 +51,15 @@ end
 
 -- Load projects list by auto-detecting from pnpm-workspace.yaml
 M.load_pnpm_projects = function()
-  if M.config.auto_detect then
-    local detected_projects = utils.auto_detect_projects(M.currentMonorepo)
-    if detected_projects and #detected_projects > 0 then
-      M.monorepoVars[M.currentMonorepo] = detected_projects
-    else
-      -- If no projects detected, default to root
-      M.monorepoVars[M.currentMonorepo] = { "/" }
-    end
+  local detected_projects = utils.auto_detect_projects(M.currentMonorepo)
+  if detected_projects and #detected_projects > 0 then
+    M.monorepoVars[M.currentMonorepo] = detected_projects
   else
-    -- If auto-detect is disabled, default to root
+    -- If no projects detected, default to root
     M.monorepoVars[M.currentMonorepo] = { "/" }
   end
-
-  M.currentProjects = M.monorepoVars[M.currentMonorepo] or { "/" }
-end
-
-M.go_to_project = function(index)
-  local project = M.monorepoVars[M.currentMonorepo][index]
-  if not project then
-    return
-  end
-  vim.api.nvim_set_current_dir(M.currentMonorepo .. "/" .. project)
-  utils.notify(messages.SWITCHED_PROJECT .. ": " .. project)
+  
+  M.currentProjects = M.monorepoVars[M.currentMonorepo]
 end
 
 M.change_monorepo = function(path)

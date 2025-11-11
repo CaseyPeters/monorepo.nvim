@@ -10,7 +10,6 @@ Its goal is to make juggling multiple projects inside of a monorepo a little eas
 - 🚀 **Auto-detection**: Automatically detects projects from `pnpm-workspace.yaml`
 - 📦 **Workspace-aware**: Understands pnpm workspace patterns and resolves them to actual packages
 - 🔍 **Smart discovery**: Only includes directories with `package.json` files as valid packages
-- ⭐ **Favorites**: Star your favorite projects for quick access
 
 ## Requirements
 
@@ -37,24 +36,15 @@ Install the plugin (This example uses [lazy.nvim](https://github.com/folke/lazy.
 
 ```lua
 {
-  silent = false, -- Supresses vim.notify messages
+  silent = false, -- Suppresses vim.notify messages
   autoload_telescope = true, -- Automatically loads the telescope extension at setup
-  data_path = vim.fn.stdpath("data"), -- Path that monorepo.json gets saved to
-  auto_detect = true, -- Auto-detect projects from pnpm-workspace.yaml
-  default_keybindings = false, -- Set up default keybindings automatically
-  keybindings = {
-    open_projects = "<leader>m", -- Open projects picker (shows favorites at top)
-    toggle_project = "<leader>mn", -- Toggle current project
-    next_project = "<leader>m]", -- Navigate to next project
-    prev_project = "<leader>m[", -- Navigate to previous project
-  },
 }
 ```
 
 The telescope extension needs to be loaded at any point AFTER `require("telescope").setup()` and `require("monorepo").setup()`.
 By default, this is done automatically but you can undo this by setting `{ autoload_telescope = false }` in the config.
 
-This is the snippet you'll need to run to load the extension if doing it manually
+This is the snippet you'll need to run to load the extension if doing it manually:
 
 ```lua
 require("telescope").load_extension("monorepo")
@@ -62,55 +52,27 @@ require("telescope").load_extension("monorepo")
 
 ### Keybindings
 
-You can set up keybindings in two ways:
-
-**Option 1: Enable default keybindings automatically**
+Set up your own keybindings to use the plugin:
 
 ```lua
-require("monorepo").setup({
-  default_keybindings = true,
-})
-```
-
-This will automatically set up keybindings using the default keybindings table. You can customize them:
-
-```lua
-require("monorepo").setup({
-  default_keybindings = true,
-  keybindings = {
-    open_projects = "<leader>m",    -- Customize projects picker keybind
-    toggle_project = "<leader>mn",  -- Customize toggle project keybind
-    next_project = "<leader>m]",    -- Navigate to next project
-    prev_project = "<leader>m[",    -- Navigate to previous project
-  },
-})
-```
-
-**Option 2: Set up keybindings manually**
-
-```lua
+-- Open projects picker
 vim.keymap.set("n", "<leader>m", function()
   require("telescope").extensions.monorepo.monorepo()
 end)
-vim.keymap.set("n", "<leader>mn", function()
-  require("monorepo").toggle_project()
-end)
 ```
 
-To disable a specific keybinding, set it to `nil` in the keybindings table.
-
-## Usage (These can be mapped to keybinds)
+## Usage
 
 ### Auto-Detection (pnpm workspaces)
 
-By default, the plugin automatically detects all projects from your `pnpm-workspace.yaml` file:
+The plugin automatically detects all projects from your `pnpm-workspace.yaml` file:
 
 1. **Monorepo Root Detection**: The plugin walks up the directory tree to find `pnpm-workspace.yaml`
 2. **Pattern Parsing**: Extracts workspace patterns from the file (e.g., `apps/*`, `packages/*`)
 3. **Package Resolution**: Resolves patterns to actual directories that contain `package.json`
-4. **Auto-Merge**: Detected projects are merged with any manually added projects
 
 **Example `pnpm-workspace.yaml`:**
+
 ```yaml
 packages:
   - 'apps/*'
@@ -118,200 +80,57 @@ packages:
   - 'tools/*'
 ```
 
-When auto-detection is enabled (default), all directories matching these patterns that contain a `package.json` will be automatically added to your project list.
+All directories matching these patterns that contain a `package.json` will be automatically detected as projects.
 
-To disable auto-detection and use manual project management only:
+### Telescope Picker
 
-```lua
-require("monorepo").setup({
-  auto_detect = false,
-})
-```
-
-### Managing Projects
-
-You can add the current file's directory to the project list (works in netrw and files)
-
-```lua
-:lua require("monorepo").add_project()
-```
-
-You can also remove it if you don't want it in the project list
-
-```lua
-:lua require("monorepo").remove_project()
-```
-
-You can also toggle these with a single command
-
-```lua
-:lua require("monorepo").toggle_project()
-```
-
-You can also use a prompt to manage your projects
-
-```lua
--- You can use "add", "remove" or "toggle" here.
--- If you don't specify any, it defaults to add
-:lua require("monorepo").prompt_project("add")
-```
-
-### Changing Projects
-
-You can jump to a specific sub-project using its index (they're ordered in the order you added them)
-
-```lua
-:lua require("monorepo").go_to_project(index)
-```
-
-_I use a for loop here to quickly jump to different indexes_
-
-```lua
-for i = 1, 9 do
-  set("n", "<leader>" .. i, function()
-    require("monorepo").go_to_project(i)
-  end)
-end
-```
-
-There are also functions to jump to the next or previous project
-
-```lua
-:lua require("monorepo").next_project()
-:lua require("monorepo").previous_project()
-```
-
-### Telescope
-
-You can view the project list like this
+View and navigate to projects using the Telescope picker:
 
 ```lua
 :Telescope monorepo
 ```
 
-or this
+or programmatically:
 
 ```lua
-:lua require("telescope").extensions.monorepo.monorepo()
+require("telescope").extensions.monorepo.monorepo()
 ```
 
-You can also manage your projects using keybinds inside of telescope.
-
-```lua
--- Normal Mode
-dd -> delete_entry
-s  -> toggle_favorite (star/unstar project)
-
--- Insert Mode
-<ctrl-d> -> delete_entry
-<ctrl-a> -> add_entry
-<ctrl-s> -> toggle_favorite (star/unstar project)
-```
-
-The main project picker shows all projects with favorites at the top (marked with ⭐), followed by a separator, then all other projects. Use the favorites picker to see only your starred projects.
-
-### Favorites
-
-You can star your favorite projects for quick access! Favorite projects appear at the top of the main projects picker with a ⭐ indicator.
-
-**View your favorites:**
-```lua
-:Telescope monorepo favorites
-```
-
-or
-
-```lua
-:lua require("telescope").extensions.monorepo.favorites()
-```
-
-**Manage favorites programmatically:**
-```lua
--- Add current project to favorites
-:lua require("monorepo").add_favorite()
-
--- Remove current project from favorites
-:lua require("monorepo").remove_favorite()
-
--- Toggle favorite status
-:lua require("monorepo").toggle_favorite()
-
--- Check if project is favorited
-:lua require("monorepo").is_favorite("/path/to/project")
-
--- Get all favorites
-:lua require("monorepo").get_favorites()
-```
-
-**In Telescope:**
-- Press `s` (normal mode) or `<c-s>` (insert mode) in the project picker to star/unstar a project
-- Press `dd` in the favorites picker to remove a project from favorites
-
-_These are very basic for now and can't be changed in the config, feel free to create an issue to suggest ideas._
+Select a project to change your working directory to that project. Projects are automatically sorted alphabetically.
 
 ### Changing Monorepos
 
-Using this, you can switch monorepos without having to close nvim and cd to a different directory
+Switch monorepos without having to close nvim and cd to a different directory:
 
 ```lua
-:lua require("monorepo").change_monorepo(path)
+:lua require("monorepo").change_monorepo("/path/to/monorepo")
 ```
 
-When you change monorepos, the plugin will automatically detect the new monorepo root from `pnpm-workspace.yaml` and auto-detect projects if `auto_detect` is enabled.
+When you change monorepos, the plugin will automatically detect the new monorepo root from `pnpm-workspace.yaml` and auto-detect projects.
 
 This pairs well with something like [telescope-project.nvim](https://github.com/nvim-telescope/telescope-project.nvim), which offers a hook when changing projects.
-See an example from my own config below:
-
-```lua
-require("telescope").setup({
-  extensions = {
-    monorepo = {
-      on_project_selected = function(prompt_bufnr)
-        local action_state = require("telescope.actions.state")
-        local actions = require("telescope.actions")
-        local selected_entry = action_state.get_selected_entry(prompt_bufnr)
-        
-        -- Change dir to the selected project
-        vim.api.nvim_set_current_dir(require("monorepo").currentMonorepo .. "/" .. selected_entry.value)
-        
-        -- Close the picker
-        actions.close(prompt_bufnr)
-        
-        -- Open find_files in the new directory
-        require("telescope.builtin").find_files()
-      end,
-    }
-  }
-}
-```
 
 ## FAQ
 
-### Does this persist between sessions? Where does this save?
+### Does this persist between sessions?
 
-I use `vim.fn.stdpath("data")` to find the data path and then write a file called `monorepo.json`.
-This defaults to `$HOME/.local/share/nvim/` but can be changed in the config with `{ data_path = '/path/to/directory' }`
+No. The plugin does not save any data to disk. Projects are auto-detected fresh from `pnpm-workspace.yaml` every time the plugin is initialized or when you change monorepos.
 
 ### How does auto-detection work?
 
-When `auto_detect` is enabled (default):
+The plugin automatically detects projects from `pnpm-workspace.yaml`:
+
 1. The plugin searches for `pnpm-workspace.yaml` by walking up from the current directory
 2. It parses the workspace file to extract package patterns
 3. It resolves wildcard patterns (e.g., `apps/*`) to actual directories
 4. Only directories containing `package.json` are included as valid packages
-5. Detected projects are merged with any manually added projects (no duplicates)
 
 Auto-detection runs automatically when:
 - The plugin is initialized (`setup()`)
 - You change monorepos (`change_monorepo()`)
-- The monorepo data is loaded (`load()`)
 
-## Extras features I wanna add in the future
+## Future Features
 
-- Lualine support??
-- NerdTree support? what are popular trees/fs plugins?
-- Give projects a "nickname"?
-- Include info on projects?
-- When opening a known subproject, it detects it
-- Remove repeated code with add, remove and toggle
 - Support for other workspace formats (yarn, npm, lerna, etc.)
+- Lualine support
+- Integration with popular file tree plugins
